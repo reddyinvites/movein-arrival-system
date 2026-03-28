@@ -2,6 +2,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+import urllib.parse
 
 # -----------------------
 # SESSION
@@ -44,7 +45,7 @@ if st.session_state.page == "home":
         st.rerun()
 
 # =====================
-# USER
+# USER PAGE
 # =====================
 elif st.session_state.page == "user":
 
@@ -61,7 +62,7 @@ elif st.session_state.page == "user":
         ["Yes, I need pickup", "No, I will go myself"]
     )
 
-    # PICKUP
+    # PICKUP OPTION
     if choice == "Yes, I need pickup":
 
         pickup_point = st.selectbox(
@@ -69,7 +70,7 @@ elif st.session_state.page == "user":
             ["Railway Station", "Bus Stand", "Metro Station"]
         )
 
-        if st.button("Confirm Pickup"):
+        if st.button("Confirm Pickup") and name and phone and pg_name:
 
             pickup_sheet.append_row([
                 name,
@@ -84,7 +85,7 @@ elif st.session_state.page == "user":
             ])
 
             st.success("🚖 Pickup request submitted!")
-            st.info("We will contact you shortly on WhatsApp")
+            st.info("We will contact you on WhatsApp shortly")
 
     # SELF NAVIGATION
     else:
@@ -105,7 +106,7 @@ elif st.session_state.page == "user":
         st.success("Easy to reach 👍")
 
 # =====================
-# ADMIN
+# ADMIN PANEL
 # =====================
 elif st.session_state.page == "admin":
 
@@ -139,7 +140,7 @@ elif st.session_state.page == "admin":
 
         row_index = i + 2
 
-        # SAFE DICT
+        # SAFE DATA FIX
         o = {h.strip().lower(): v for h, v in zip(headers, rows[i])}
 
         name_val = o.get("name", "")
@@ -150,7 +151,8 @@ elif st.session_state.page == "admin":
         driver_name = o.get("driver_name", "")
         driver_phone = o.get("driver_phone", "")
 
-        st.write(f"👤 {name_val} | 📞 {phone_val}")
+        # SHOW DATA (NO HIDDEN ISSUE)
+        st.write(f"👤 {name_val if name_val else 'No Name'} | 📞 {phone_val if phone_val else 'No Phone'}")
         st.write(f"🏠 {pg_val}")
         st.write(f"📍 {point_val}")
 
@@ -169,18 +171,23 @@ elif st.session_state.page == "admin":
                 driver_name = "Ravi Kumar"
                 driver_phone = "919876543210"
 
-                # 🔥 FIXED UPDATE (RANGE METHOD)
-                pickup_sheet.update(f"F{row_index}:H{row_index}", [[
-                    "Assigned",
-                    driver_name,
-                    driver_phone
-                ]])
+                try:
+                    pickup_sheet.update(f"F{row_index}:H{row_index}", [[
+                        "Assigned",
+                        driver_name,
+                        driver_phone
+                    ]])
+                    st.success("✅ Updated in Google Sheet")
+                except Exception as e:
+                    st.error(f"Update failed: {e}")
 
+                # WHATSAPP FIX
                 msg = f"Hello {name_val}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
-                wa = f"https://wa.me/{phone_val}?text={msg.replace(' ','%20')}"
+                encoded_msg = urllib.parse.quote(msg)
 
-                st.markdown(f"[💬 Send WhatsApp]({wa})")
-                st.success("Driver Assigned!")
+                wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
+
+                st.markdown(f"[💬 Open WhatsApp]({wa})")
 
                 st.rerun()
 
@@ -188,7 +195,9 @@ elif st.session_state.page == "admin":
         else:
 
             msg = f"Hello {name_val}, your driver {driver_name} is on the way. Call: {driver_phone}"
-            wa = f"https://wa.me/{phone_val}?text={msg.replace(' ','%20')}"
+            encoded_msg = urllib.parse.quote(msg)
+
+            wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
 
             st.markdown(f"[💬 Message Customer]({wa})")
 
