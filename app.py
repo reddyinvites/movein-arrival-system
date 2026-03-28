@@ -4,13 +4,13 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # -----------------------
-# SESSION INIT
+# SESSION
 # -----------------------
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS CONNECT
+# GOOGLE SHEETS
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -25,7 +25,7 @@ client = gspread.authorize(creds)
 
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
 
-# ✅ Sheet1 used
+# ✅ using Sheet1
 pickup_sheet = sheet.worksheet("Sheet1")
 
 # =====================
@@ -33,7 +33,7 @@ pickup_sheet = sheet.worksheet("Sheet1")
 # =====================
 if st.session_state.page == "home":
 
-    st.title("🏠 Move-in Support System")
+    st.title("🏠 Move-in Support")
 
     col1, col2 = st.columns(2)
 
@@ -42,11 +42,11 @@ if st.session_state.page == "home":
         st.rerun()
 
     if col2.button("🚗 Pickup Admin"):
-        st.session_state.page = "pickup_admin"
+        st.session_state.page = "admin"
         st.rerun()
 
 # =====================
-# USER PAGE
+# USER
 # =====================
 elif st.session_state.page == "user":
 
@@ -63,9 +63,7 @@ elif st.session_state.page == "user":
         ["Yes, I need pickup", "No, I will go myself"]
     )
 
-    # -----------------------
-    # PICKUP OPTION
-    # -----------------------
+    # PICKUP
     if choice == "Yes, I need pickup":
 
         pickup_point = st.selectbox(
@@ -88,33 +86,30 @@ elif st.session_state.page == "user":
             ])
 
             st.success("🚖 Pickup request submitted!")
-            st.info("Our team will contact you shortly on WhatsApp")
+            st.info("We will contact you shortly on WhatsApp")
 
-    # -----------------------
     # SELF NAVIGATION
-    # -----------------------
     else:
 
         st.subheader("🧭 Self Navigation")
 
         st.markdown("[📍 Open Google Maps](https://maps.google.com)")
-
         st.video("https://res.cloudinary.com/demo/video/upload/sample.mp4")
 
         st.write("""
         📌 Directions:
         1. Exit main road  
-        2. Take left at signal  
+        2. Take left  
         3. Walk 100 meters  
-        4. PG on right side  
+        4. PG on right  
         """)
 
-        st.success("You can reach easily 👍")
+        st.success("Easy to reach 👍")
 
 # =====================
-# ADMIN PANEL
+# ADMIN
 # =====================
-elif st.session_state.page == "pickup_admin":
+elif st.session_state.page == "admin":
 
     st.title("🚗 Pickup Admin Dashboard")
 
@@ -134,7 +129,7 @@ elif st.session_state.page == "pickup_admin":
     data = pickup_sheet.get_all_values()
 
     if len(data) <= 1:
-        st.info("No pickup requests yet")
+        st.info("No requests yet")
         st.stop()
 
     headers = data[0]
@@ -145,24 +140,31 @@ elif st.session_state.page == "pickup_admin":
     for i in reversed(range(len(rows))):
 
         row_index = i + 2
-        o = dict(zip(headers, rows[i]))
 
-        st.write(f"👤 {o['name']} | 📞 {o['phone']}")
-        st.write(f"🏠 {o['pg_name']}")
-        st.write(f"📍 {o['pickup_point']}")
+        # 🔥 SAFE DICT (NO KEY ERROR)
+        o = {h.strip().lower(): v for h, v in zip(headers, rows[i])}
 
-        # STATUS
-        if o["status"] == "Pending":
+        name_val = o.get("name", "")
+        phone_val = o.get("phone", "")
+        pg_val = o.get("pg_name", "")
+        point_val = o.get("pickup_point", "")
+        status_val = o.get("status", "")
+        driver_name = o.get("driver_name", "")
+        driver_phone = o.get("driver_phone", "")
+
+        st.write(f"👤 {name_val} | 📞 {phone_val}")
+        st.write(f"🏠 {pg_val}")
+        st.write(f"📍 {point_val}")
+
+        if status_val == "Pending":
             st.warning("Pending")
         else:
             st.success("Assigned")
 
         col1, col2 = st.columns(2)
 
-        # -----------------------
         # ASSIGN DRIVER
-        # -----------------------
-        if o["status"] == "Pending":
+        if status_val == "Pending":
 
             if col1.button("🚖 Assign Driver", key=f"a{i}"):
 
@@ -173,30 +175,24 @@ elif st.session_state.page == "pickup_admin":
                 pickup_sheet.update_cell(row_index, 7, driver_name)
                 pickup_sheet.update_cell(row_index, 8, driver_phone)
 
-                msg = f"Hello {o['name']}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
-
-                wa = f"https://wa.me/{o['phone']}?text={msg.replace(' ','%20')}"
+                msg = f"Hello {name_val}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
+                wa = f"https://wa.me/{phone_val}?text={msg.replace(' ','%20')}"
 
                 st.markdown(f"[💬 Send WhatsApp]({wa})")
-
                 st.success("Driver Assigned!")
+
                 st.rerun()
 
-        # -----------------------
-        # WHATSAPP AFTER ASSIGNED
-        # -----------------------
+        # AFTER ASSIGNED
         else:
 
-            msg = f"Hello {o['name']}, your driver {o['driver_name']} is on the way. Call: {o['driver_phone']}"
-
-            wa = f"https://wa.me/{o['phone']}?text={msg.replace(' ','%20')}"
+            msg = f"Hello {name_val}, your driver {driver_name} is on the way. Call: {driver_phone}"
+            wa = f"https://wa.me/{phone_val}?text={msg.replace(' ','%20')}"
 
             st.markdown(f"[💬 Message Customer]({wa})")
 
-        # -----------------------
         # CALL DRIVER
-        # -----------------------
-        if o["driver_phone"]:
-            st.markdown(f"[📞 Call Driver](tel:{o['driver_phone']})")
+        if driver_phone:
+            st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
         st.divider()
