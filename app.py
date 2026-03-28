@@ -24,8 +24,6 @@ creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
-
-# ✅ using Sheet1
 pickup_sheet = sheet.worksheet("Sheet1")
 
 # =====================
@@ -141,7 +139,7 @@ elif st.session_state.page == "admin":
 
         row_index = i + 2
 
-        # 🔥 SAFE DICT (NO KEY ERROR)
+        # SAFE DICT
         o = {h.strip().lower(): v for h, v in zip(headers, rows[i])}
 
         name_val = o.get("name", "")
@@ -171,9 +169,12 @@ elif st.session_state.page == "admin":
                 driver_name = "Ravi Kumar"
                 driver_phone = "919876543210"
 
-                pickup_sheet.update_cell(row_index, 6, "Assigned")
-                pickup_sheet.update_cell(row_index, 7, driver_name)
-                pickup_sheet.update_cell(row_index, 8, driver_phone)
+                # 🔥 FIXED UPDATE (RANGE METHOD)
+                pickup_sheet.update(f"F{row_index}:H{row_index}", [[
+                    "Assigned",
+                    driver_name,
+                    driver_phone
+                ]])
 
                 msg = f"Hello {name_val}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
                 wa = f"https://wa.me/{phone_val}?text={msg.replace(' ','%20')}"
