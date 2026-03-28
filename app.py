@@ -6,7 +6,7 @@ from datetime import datetime
 st.title("🚗 Arrival & Pickup Assistance")
 
 # -----------------------
-# GOOGLE SHEETS
+# GOOGLE SHEETS CONNECT
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -19,8 +19,11 @@ gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
+# 👉 YOUR SHEET ID
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
-pickup_sheet = sheet.worksheet("pickup_requests")
+
+# ✅ FIX HERE (Sheet1)
+pickup_sheet = sheet.worksheet("Sheet1")
 
 # -----------------------
 # USER INPUT
@@ -37,7 +40,7 @@ choice = st.radio(
 )
 
 # -----------------------
-# PICKUP FLOW
+# PICKUP OPTION
 # -----------------------
 if choice == "Yes, I need pickup":
 
@@ -74,6 +77,7 @@ else:
     st.video("https://res.cloudinary.com/demo/video/upload/sample.mp4")
 
     st.write("""
+    📌 Directions:
     1. Exit main road  
     2. Take left at signal  
     3. Walk 100 meters  
