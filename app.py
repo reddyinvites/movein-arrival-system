@@ -25,7 +25,7 @@ creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
 # -----------------------
-# PICKUP SHEET (OLD - SAME)
+# PICKUP SHEET
 # -----------------------
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
 
@@ -35,7 +35,7 @@ except:
     pickup_sheet = sheet.get_worksheet(0)
 
 # -----------------------
-# PG DATA SHEET (NEW)
+# PG DATA SHEET
 # -----------------------
 pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
 
@@ -79,7 +79,6 @@ elif st.session_state.page == "user":
     name = st.text_input("Your Name")
     phone = st.text_input("Phone Number")
 
-    # ✅ CHANGED TO DROPDOWN
     pg_name = st.selectbox("PG Name", pg_list)
 
     st.divider()
@@ -89,7 +88,6 @@ elif st.session_state.page == "user":
         ["Yes, I need pickup", "No, I will go myself"]
     )
 
-    # PICKUP OPTION
     if choice == "Yes, I need pickup":
 
         pickup_point = st.selectbox(
@@ -97,14 +95,20 @@ elif st.session_state.page == "user":
             ["Railway Station", "Bus Stand", "Metro Station"]
         )
 
-        if st.button("Confirm Pickup") and name and phone and pg_name:
+        if st.button("Confirm Pickup"):
+
+            if not name or not phone or not pg_name:
+                st.error("⚠️ Please fill all details")
+                st.stop()
+
+            location = pickup_point
 
             pickup_sheet.append_row([
                 name,
                 phone,
                 pg_name,
                 "Yes",
-                pickup_point,
+                location,
                 "Pending",
                 "",
                 "",
@@ -114,7 +118,6 @@ elif st.session_state.page == "user":
             st.success("🚖 Pickup request submitted!")
             st.info("We will contact you on WhatsApp shortly")
 
-    # SELF NAVIGATION
     else:
 
         st.subheader("🧭 Self Navigation")
@@ -177,52 +180,42 @@ elif st.session_state.page == "admin":
         driver_name = o.get("driver_name", "")
         driver_phone = o.get("driver_phone", "")
 
-        st.write(f"👤 {name_val if name_val else 'No Name'} | 📞 {phone_val if phone_val else 'No Phone'}")
-        st.write(f"🏠 {pg_val}")
-        st.write(f"📍 {point_val}")
+        # CLEAN UI
+        st.markdown(f"### 👤 {name_val}  |  📞 {phone_val}")
+        st.markdown(f"🏠 **{pg_val}**")
+        st.markdown(f"📍 {point_val}")
 
         if status_val == "Pending":
-            st.warning("Pending")
+            st.warning("⏳ Pending")
         else:
-            st.success("Assigned")
+            st.success("✅ Assigned")
 
         col1, col2 = st.columns(2)
 
-        if status_val == "Pending":
+        msg = f"Hello {name_val}, your pickup is confirmed!"
+        encoded_msg = urllib.parse.quote(msg)
+        wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
 
-            if col1.button("🚖 Assign Driver", key=f"a{i}"):
+        # ASSIGN BUTTON
+        if status_val == "Pending":
+            if col1.button("✅ Assign", key=f"a{i}"):
 
                 driver_name = "Ravi Kumar"
                 driver_phone = "919876543210"
 
-                try:
-                    pickup_sheet.update(f"F{row_index}:H{row_index}", [[
-                        "Assigned",
-                        driver_name,
-                        driver_phone
-                    ]])
-                    st.success("✅ Updated in Google Sheet")
-                except Exception as e:
-                    st.error(f"Update failed: {e}")
+                pickup_sheet.update(f"F{row_index}:H{row_index}", [[
+                    "Assigned",
+                    driver_name,
+                    driver_phone
+                ]])
 
-                msg = f"Hello {name_val}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
-                encoded_msg = urllib.parse.quote(msg)
-
-                wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
-
-                st.markdown(f"[💬 Open WhatsApp]({wa})")
-
+                st.success("Assigned ✅")
                 st.rerun()
 
-        else:
+        # WHATSAPP BUTTON
+        col2.markdown(f"[💬 WhatsApp]({wa})")
 
-            msg = f"Hello {name_val}, your driver {driver_name} is on the way. Call: {driver_phone}"
-            encoded_msg = urllib.parse.quote(msg)
-
-            wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
-
-            st.markdown(f"[💬 Message Customer]({wa})")
-
+        # CALL DRIVER
         if driver_phone:
             st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
