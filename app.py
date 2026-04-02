@@ -3,6 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
 import urllib.parse
+import time
 
 # -----------------------
 # SESSION
@@ -11,7 +12,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS SAFE SETUP
+# GOOGLE SHEETS SETUP (CACHED)
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -21,26 +22,29 @@ scope = [
 gcp_info = dict(st.secrets["gcp_service_account"])
 gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 
-creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
-client = gspread.authorize(creds)
+@st.cache_resource
+def get_client():
+    creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
+    return gspread.authorize(creds)
+
+client = get_client()
 
 # -----------------------
-# SAFE SHEET CREATE / OPEN
+# SAFE OPEN WITH RETRY
 # -----------------------
-def open_or_create(sheet_id, sheet_name, headers):
-    try:
-        sh = client.open_by_key(sheet_id)
-    except Exception as e:
-        st.error(f"❌ Sheet connection failed: {e}")
-        st.stop()
-
-    try:
-        ws = sh.worksheet(sheet_name)
-    except:
-        ws = sh.add_worksheet(title=sheet_name, rows="1000", cols="20")
-        ws.append_row(headers)
-
-    return ws
+def open_sheet_safe(sheet_id, sheet_name, retries=3):
+    for attempt in range(retries):
+        try:
+            sh = client.open_by_key(sheet_id)
+            ws = sh.worksheet(sheet_name)
+            return ws
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2)
+            else:
+                st.error(f"❌ Sheet error: {sheet_name}")
+                st.write(str(e))
+                st.stop()
 
 # -----------------------
 # CONNECT SHEETS
@@ -48,23 +52,9 @@ def open_or_create(sheet_id, sheet_name, headers):
 MAIN_SHEET_ID = "1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s"
 PG_SHEET_ID = "1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q"
 
-pickup_sheet = open_or_create(
-    MAIN_SHEET_ID,
-    "Pickup1",
-    ["name","phone","pg_name","pickup_required","pickup_point","status","driver_name","driver_phone","timestamp"]
-)
-
-driver_sheet = open_or_create(
-    MAIN_SHEET_ID,
-    "Drivers",
-    ["name","phone","status","current_ride"]
-)
-
-pg_data_sheet = open_or_create(
-    PG_SHEET_ID,
-    "Sheet1",
-    ["pg_name"]
-)
+pickup_sheet = open_sheet_safe(MAIN_SHEET_ID, "Pickup1")
+driver_sheet = open_sheet_safe(MAIN_SHEET_ID, "Drivers")
+pg_data_sheet = open_sheet_safe(PG_SHEET_ID, "Sheet1")
 
 # -----------------------
 # PHONE CLEAN
