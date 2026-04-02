@@ -24,13 +24,33 @@ gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
+# -----------------------
+# PICKUP SHEET (OLD - SAME)
+# -----------------------
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
 
-# ✅ FIXED HERE (no other changes)
 try:
     pickup_sheet = sheet.worksheet("Pickup1")
 except:
     pickup_sheet = sheet.get_worksheet(0)
+
+# -----------------------
+# PG DATA SHEET (NEW)
+# -----------------------
+pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
+
+try:
+    pg_data_sheet = pg_sheet.worksheet("Sheet1")
+except:
+    pg_data_sheet = pg_sheet.get_worksheet(0)
+
+pg_data = pg_data_sheet.get_all_records()
+
+pg_list = []
+for row in pg_data:
+    name = row.get("pg_name") or row.get("name") or ""
+    if name and name not in pg_list:
+        pg_list.append(name)
 
 # =====================
 # HOME
@@ -58,7 +78,9 @@ elif st.session_state.page == "user":
 
     name = st.text_input("Your Name")
     phone = st.text_input("Phone Number")
-    pg_name = st.text_input("PG Name")
+
+    # ✅ CHANGED TO DROPDOWN
+    pg_name = st.selectbox("PG Name", pg_list)
 
     st.divider()
 
@@ -145,7 +167,6 @@ elif st.session_state.page == "admin":
 
         row_index = i + 2
 
-        # SAFE DATA FIX
         o = {h.strip().lower(): v for h, v in zip(headers, rows[i])}
 
         name_val = o.get("name", "")
@@ -156,7 +177,6 @@ elif st.session_state.page == "admin":
         driver_name = o.get("driver_name", "")
         driver_phone = o.get("driver_phone", "")
 
-        # SHOW DATA
         st.write(f"👤 {name_val if name_val else 'No Name'} | 📞 {phone_val if phone_val else 'No Phone'}")
         st.write(f"🏠 {pg_val}")
         st.write(f"📍 {point_val}")
@@ -168,7 +188,6 @@ elif st.session_state.page == "admin":
 
         col1, col2 = st.columns(2)
 
-        # ASSIGN DRIVER
         if status_val == "Pending":
 
             if col1.button("🚖 Assign Driver", key=f"a{i}"):
@@ -195,7 +214,6 @@ elif st.session_state.page == "admin":
 
                 st.rerun()
 
-        # AFTER ASSIGNED
         else:
 
             msg = f"Hello {name_val}, your driver {driver_name} is on the way. Call: {driver_phone}"
@@ -205,7 +223,6 @@ elif st.session_state.page == "admin":
 
             st.markdown(f"[💬 Message Customer]({wa})")
 
-        # CALL DRIVER
         if driver_phone:
             st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
