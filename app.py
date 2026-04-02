@@ -30,10 +30,6 @@ client = gspread.authorize(creds)
 sheet = client.open_by_key("1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s")
 
 pickup_sheet = sheet.worksheet("Pickup1")
-
-# -----------------------
-# DRIVER SHEET
-# -----------------------
 driver_sheet = sheet.worksheet("Drivers")
 
 # -----------------------
@@ -56,18 +52,20 @@ if st.session_state.page == "home":
 
     st.title("🏠 Move-in Support")
 
-    col1, col2 = st.columns(2)
-
-    if col1.button("👤 User"):
+    if st.button("👤 User"):
         st.session_state.page = "user"
         st.rerun()
 
-    if col2.button("🚗 Pickup Admin"):
+    if st.button("🚗 Pickup Admin"):
         st.session_state.page = "admin"
         st.rerun()
 
+    if st.button("🚗 Driver Login"):
+        st.session_state.page = "driver"
+        st.rerun()
+
 # =====================
-# USER
+# USER PAGE
 # =====================
 elif st.session_state.page == "user":
 
@@ -112,11 +110,11 @@ elif st.session_state.page == "user":
             st.success("✅ Request Submitted")
 
 # =====================
-# ADMIN
+# ADMIN PAGE
 # =====================
 elif st.session_state.page == "admin":
 
-    st.title("🚗 Pickup Admin Dashboard")
+    st.title("🚗 Admin Dashboard")
 
     if st.text_input("Password", type="password") != "1234":
         st.stop()
@@ -128,7 +126,6 @@ elif st.session_state.page == "admin":
         st.stop()
 
     rows = data[1:]
-
     drivers = driver_sheet.get_all_records()
 
     for i in reversed(range(len(rows))):
@@ -150,13 +147,15 @@ elif st.session_state.page == "admin":
 
         if status == "Pending":
             st.warning("Pending")
+        elif status == "Completed":
+            st.success("Completed")
         else:
             st.success(f"Assigned: {driver_name}")
 
         col1, col2 = st.columns(2)
 
         # ASSIGN DRIVER
-        if status != "Assigned":
+        if status == "Pending":
 
             if col1.button("🚗 Assign", key=f"a{i}"):
 
@@ -180,9 +179,12 @@ elif st.session_state.page == "admin":
                         driver_phone
                     ]])
 
-                    # Mark driver busy
                     d_index = drivers.index(available_driver) + 2
-                    driver_sheet.update(f"C{d_index}", [["Busy"]])
+
+                    driver_sheet.update(f"C{d_index}:D{d_index}", [[
+                        "Busy",
+                        name
+                    ]])
 
                     st.success(f"Assigned {driver_name}")
                     st.rerun()
@@ -193,16 +195,64 @@ elif st.session_state.page == "admin":
 
         if col2.button("💬 WhatsApp", key=f"w{i}"):
             st.markdown(
-                f"""
-                <script>
-                window.open("{wa}", "_blank");
-                </script>
-                """,
+                f"<script>window.open('{wa}', '_blank');</script>",
                 unsafe_allow_html=True
             )
 
-        # CALL DRIVER
         if driver_phone:
             st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
         st.divider()
+
+# =====================
+# DRIVER APP
+# =====================
+elif st.session_state.page == "driver":
+
+    st.title("🚗 Driver App")
+
+    phone = st.text_input("Enter Phone Number")
+
+    if st.button("Login"):
+
+        drivers = driver_sheet.get_all_records()
+
+        driver = None
+        for d in drivers:
+            if d["phone"] == phone:
+                driver = d
+                break
+
+        if not driver:
+            st.error("Driver not found")
+            st.stop()
+
+        st.success(f"Welcome {driver['name']}")
+
+        if driver["status"] == "Available":
+            st.info("No ride assigned")
+            st.stop()
+
+        st.warning("🚨 Ride Assigned")
+        st.write("Customer:", driver["current_ride"])
+
+        if st.button("✅ Complete Ride"):
+
+            d_index = drivers.index(driver) + 2
+
+            # Set driver available
+            driver_sheet.update(f"C{d_index}:D{d_index}", [[
+                "Available",
+                ""
+            ]])
+
+            # Update pickup sheet
+            pickup_data = pickup_sheet.get_all_values()
+
+            for i, r in enumerate(pickup_data[1:]):
+                if r[0] == driver["current_ride"]:
+                    pickup_sheet.update(f"F{i+2}", [["Completed"]])
+                    break
+
+            st.success("🎉 Ride Completed")
+            st.rerun()
