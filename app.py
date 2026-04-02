@@ -24,26 +24,10 @@ gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
-# -----------------------
-# MAIN SHEET
-# -----------------------
 sheet = client.open_by_key("1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s")
 
 pickup_sheet = sheet.worksheet("Pickup1")
 driver_sheet = sheet.worksheet("Drivers")
-
-# -----------------------
-# PG DATA
-# -----------------------
-pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
-pg_data_sheet = pg_sheet.worksheet("Sheet1")
-pg_data = pg_data_sheet.get_all_records()
-
-pg_list = []
-for row in pg_data:
-    name = row.get("pg_name") or row.get("name") or ""
-    if name and name not in pg_list:
-        pg_list.append(name)
 
 # =====================
 # HOME
@@ -56,61 +40,44 @@ if st.session_state.page == "home":
         st.session_state.page = "user"
         st.rerun()
 
-    if st.button("🚗 Pickup Admin"):
+    if st.button("🚗 Admin"):
         st.session_state.page = "admin"
         st.rerun()
 
-    if st.button("🚗 Driver Login"):
+    if st.button("🚗 Driver"):
         st.session_state.page = "driver"
         st.rerun()
 
 # =====================
-# USER PAGE
+# USER
 # =====================
 elif st.session_state.page == "user":
 
-    st.title("🚗 Arrival & Pickup Assistance")
+    st.title("🚗 Request Pickup")
 
-    name = st.text_input("Your Name")
-    phone = st.text_input("Phone Number")
-    pg_name = st.selectbox("PG Name", pg_list)
+    name = st.text_input("Name")
+    phone = st.text_input("Phone")
+    pg = st.text_input("PG Name")
 
-    choice = st.radio(
-        "Need pickup?",
-        ["Yes, I need pickup", "No, I will go myself"]
-    )
+    point = st.selectbox("Pickup Point", ["Railway", "Bus", "Metro"])
 
-    if choice == "Yes, I need pickup":
+    if st.button("Submit"):
 
-        pickup_point = st.selectbox(
-            "Pickup Point",
-            ["Railway Station", "Bus Stand", "Metro Station"]
-        )
+        if not name or not phone:
+            st.error("Fill details")
+            st.stop()
 
-        if st.button("Confirm Pickup"):
+        next_row = max(2, len(pickup_sheet.get_all_values()) + 1)
 
-            if not name or not phone:
-                st.error("Fill all details")
-                st.stop()
+        pickup_sheet.insert_row([
+            name, phone, pg, "Yes", point,
+            "Pending", "", "", str(datetime.now())
+        ], next_row)
 
-            next_row = max(2, len(pickup_sheet.get_all_values()) + 1)
-
-            pickup_sheet.insert_row([
-                name,
-                phone,
-                pg_name,
-                "Yes",
-                pickup_point,
-                "Pending",
-                "",
-                "",
-                str(datetime.now())
-            ], next_row)
-
-            st.success("✅ Request Submitted")
+        st.success("Request Sent")
 
 # =====================
-# ADMIN PAGE
+# ADMIN
 # =====================
 elif st.session_state.page == "admin":
 
@@ -119,88 +86,117 @@ elif st.session_state.page == "admin":
     if st.text_input("Password", type="password") != "1234":
         st.stop()
 
-    data = pickup_sheet.get_all_values()
+    # ---------------- ADD DRIVER ----------------
+    st.subheader("➕ Add Driver")
 
-    if len(data) <= 1:
-        st.warning("No requests")
-        st.stop()
+    d_name = st.text_input("Driver Name")
+    d_phone = st.text_input("Driver Phone")
+    d_status = st.selectbox("Status", ["Available", "Busy"])
 
-    rows = data[1:]
+    if st.button("Add Driver"):
+
+        drivers = driver_sheet.get_all_records()
+
+        for d in drivers:
+            if d["phone"] == d_phone:
+                st.error("Driver exists")
+                st.stop()
+
+        next_row = max(2, len(driver_sheet.get_all_values()) + 1)
+
+        driver_sheet.insert_row([d_name, d_phone, d_status, ""], next_row)
+
+        st.success("Driver Added")
+        st.rerun()
+
+    # ---------------- DRIVER MANAGEMENT ----------------
+    st.subheader("👨‍✈️ Drivers")
+
     drivers = driver_sheet.get_all_records()
 
-    for i in reversed(range(len(rows))):
+    for i, d in enumerate(drivers):
 
-        row_index = i + 2
-        row = rows[i]
+        st.markdown(f"### 🚗 {d['name']} | {d['phone']}")
 
-        name = row[0]
-        phone = row[1]
-        pg = row[2]
-        point = row[4]
-        status = row[5]
-        driver_name = row[6]
-        driver_phone = row[7]
-
-        st.markdown(f"### 👤 {name} | 📞 {phone}")
-        st.write(f"🏠 {pg}")
-        st.write(f"📍 {point}")
-
-        if status == "Pending":
-            st.warning("Pending")
-        elif status == "Completed":
-            st.success("Completed")
+        if d["status"] == "Available":
+            st.success("Available")
         else:
-            st.success(f"Assigned: {driver_name}")
+            st.warning(f"Busy → {d['current_ride']}")
 
         col1, col2 = st.columns(2)
 
-        # ASSIGN DRIVER
+        # EDIT STATUS
+        if col1.button("Toggle Status", key=f"t{i}"):
+
+            new_status = "Available" if d["status"] == "Busy" else "Busy"
+
+            driver_sheet.update(f"C{i+2}:D{i+2}", [[new_status, ""]])
+
+            st.rerun()
+
+        # DELETE
+        if col2.button("Delete", key=f"d{i}"):
+
+            driver_sheet.delete_rows(i+2)
+            st.rerun()
+
+    # ---------------- REQUESTS ----------------
+    st.subheader("📦 Requests")
+
+    data = pickup_sheet.get_all_values()
+
+    if len(data) <= 1:
+        st.warning("No data")
+        st.stop()
+
+    rows = data[1:]
+
+    for i in reversed(range(len(rows))):
+
+        row = rows[i]
+        row_index = i + 2
+
+        name, phone, pg, _, point, status, d_name, d_phone = row[:8]
+
+        st.markdown(f"### 👤 {name} | {phone}")
+        st.write(f"{pg} | {point}")
+
         if status == "Pending":
 
-            if col1.button("🚗 Assign", key=f"a{i}"):
+            if st.button("Assign", key=f"a{i}"):
 
-                available_driver = None
+                drivers = driver_sheet.get_all_records()
 
-                for d in drivers:
-                    if d["status"] == "Available":
-                        available_driver = d
-                        break
+                available = [d for d in drivers if d["status"] == "Available"]
 
-                if not available_driver:
-                    st.error("❌ No drivers available")
+                if not available:
+                    st.error("No drivers")
 
                 else:
-                    driver_name = available_driver["name"]
-                    driver_phone = available_driver["phone"]
+                    best = available[0]
 
                     pickup_sheet.update(f"F{row_index}:H{row_index}", [[
-                        "Assigned",
-                        driver_name,
-                        driver_phone
+                        "Assigned", best["name"], best["phone"]
                     ]])
 
-                    d_index = drivers.index(available_driver) + 2
+                    d_index = drivers.index(best) + 2
 
                     driver_sheet.update(f"C{d_index}:D{d_index}", [[
-                        "Busy",
-                        name
+                        "Busy", name
                     ]])
 
-                    st.success(f"Assigned {driver_name}")
+                    st.success("Assigned")
                     st.rerun()
 
-        # WHATSAPP BUTTON
-        msg = f"Hello {name}, your pickup is confirmed!"
+        # WhatsApp
+        msg = f"Hello {name}, pickup confirmed"
         wa = f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
 
-        if col2.button("💬 WhatsApp", key=f"w{i}"):
+        if st.button("💬 WhatsApp", key=f"w{i}"):
             st.markdown(
                 f"<script>window.open('{wa}', '_blank');</script>",
                 unsafe_allow_html=True
             )
-
-        if driver_phone:
-            st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
         st.divider()
 
@@ -211,7 +207,7 @@ elif st.session_state.page == "driver":
 
     st.title("🚗 Driver App")
 
-    phone = st.text_input("Enter Phone Number")
+    phone = st.text_input("Phone")
 
     if st.button("Login"):
 
@@ -221,38 +217,33 @@ elif st.session_state.page == "driver":
         for d in drivers:
             if d["phone"] == phone:
                 driver = d
-                break
 
         if not driver:
-            st.error("Driver not found")
+            st.error("Not found")
             st.stop()
 
-        st.success(f"Welcome {driver['name']}")
+        st.success(driver["name"])
 
         if driver["status"] == "Available":
-            st.info("No ride assigned")
+            st.info("No ride")
             st.stop()
 
-        st.warning("🚨 Ride Assigned")
-        st.write("Customer:", driver["current_ride"])
+        st.warning("Ride Assigned")
+        st.write(driver["current_ride"])
 
-        if st.button("✅ Complete Ride"):
+        if st.button("Complete Ride"):
 
             d_index = drivers.index(driver) + 2
 
-            # Set driver available
-            driver_sheet.update(f"C{d_index}:D{d_index}", [[
-                "Available",
-                ""
-            ]])
+            driver_sheet.update(f"C{d_index}:D{d_index}", [["Available", ""]])
 
-            # Update pickup sheet
-            pickup_data = pickup_sheet.get_all_values()
+            # update pickup
+            data = pickup_sheet.get_all_values()
 
-            for i, r in enumerate(pickup_data[1:]):
+            for i, r in enumerate(data[1:]):
                 if r[0] == driver["current_ride"]:
                     pickup_sheet.update(f"F{i+2}", [["Completed"]])
                     break
 
-            st.success("🎉 Ride Completed")
+            st.success("Completed")
             st.rerun()
