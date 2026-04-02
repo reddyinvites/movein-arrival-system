@@ -11,7 +11,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS SETUP
+# GOOGLE SHEETS
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -25,7 +25,7 @@ creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
 # -----------------------
-# ✅ CORRECT PICKUP SHEET (FIXED ID)
+# PICKUP SHEET (YOUR CORRECT ID)
 # -----------------------
 sheet = client.open_by_key("1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s")
 
@@ -34,6 +34,9 @@ try:
 except Exception as e:
     st.error(f"❌ Sheet error: {e}")
     st.stop()
+
+# DEBUG
+st.write("Connected Sheet:", pickup_sheet.title)
 
 # -----------------------
 # PG DATA SHEET
@@ -95,6 +98,7 @@ elif st.session_state.page == "user":
             ["Railway Station", "Bus Stand", "Metro Station"]
         )
 
+        # ---------------- SAVE FIX ----------------
         if st.button("Confirm Pickup"):
 
             if not name or not phone or not pg_name:
@@ -102,7 +106,10 @@ elif st.session_state.page == "user":
                 st.stop()
 
             try:
-                pickup_sheet.append_row([
+                # ALWAYS FIND NEXT ROW
+                next_row = max(2, len(pickup_sheet.get_all_values()) + 1)
+
+                pickup_sheet.insert_row([
                     name,
                     phone,
                     pg_name,
@@ -112,12 +119,12 @@ elif st.session_state.page == "user":
                     "",
                     "",
                     str(datetime.now())
-                ])
+                ], next_row)
 
-                st.success("✅ Saved to Google Sheet")
+                st.success("✅ Saved to Google Sheet (Fixed)")
 
             except Exception as e:
-                st.error(f"❌ Save failed: {e}")
+                st.error(f"❌ Save Error: {e}")
 
     else:
 
@@ -184,6 +191,7 @@ elif st.session_state.page == "admin":
 
         col1, col2 = st.columns(2)
 
+        # ASSIGN
         if status_val != "Assigned":
             if col1.button("✅ Assign", key=f"a{i}"):
 
@@ -196,6 +204,7 @@ elif st.session_state.page == "admin":
                 st.success("Driver Assigned 🚗")
                 st.rerun()
 
+        # WHATSAPP
         msg = f"Hello {name_val}, your pickup is confirmed!"
         wa = f"https://wa.me/{phone_val}?text={urllib.parse.quote(msg)}"
 
