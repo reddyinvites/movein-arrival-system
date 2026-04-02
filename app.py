@@ -12,7 +12,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS SETUP (CACHED)
+# GOOGLE SHEETS SETUP
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -30,14 +30,13 @@ def get_client():
 client = get_client()
 
 # -----------------------
-# SAFE OPEN WITH RETRY
+# SAFE SHEET OPEN (RETRY)
 # -----------------------
 def open_sheet_safe(sheet_id, sheet_name, retries=3):
     for attempt in range(retries):
         try:
             sh = client.open_by_key(sheet_id)
-            ws = sh.worksheet(sheet_name)
-            return ws
+            return sh.worksheet(sheet_name)
         except Exception as e:
             if attempt < retries - 1:
                 time.sleep(2)
@@ -47,7 +46,7 @@ def open_sheet_safe(sheet_id, sheet_name, retries=3):
                 st.stop()
 
 # -----------------------
-# CONNECT SHEETS
+# SHEET IDS
 # -----------------------
 MAIN_SHEET_ID = "1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s"
 PG_SHEET_ID = "1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q"
@@ -87,7 +86,7 @@ if st.session_state.page == "home":
         st.rerun()
 
 # =====================
-# USER
+# USER PAGE
 # =====================
 elif st.session_state.page == "user":
 
@@ -109,17 +108,15 @@ elif st.session_state.page == "user":
             st.error("Fill details")
             st.stop()
 
-        next_row = len(pickup_sheet.get_all_values()) + 1
-
-        pickup_sheet.insert_row([
+        pickup_sheet.append_row([
             name, phone, pg, "Yes", point,
             "Pending", "", "", str(datetime.now())
-        ], next_row)
+        ])
 
         st.success("✅ Request Sent")
 
 # =====================
-# ADMIN
+# ADMIN PAGE
 # =====================
 elif st.session_state.page == "admin":
 
@@ -164,12 +161,12 @@ elif st.session_state.page == "admin":
 
         col1, col2 = st.columns(2)
 
-        if col1.button("Toggle Status", key=f"t{i}"):
+        if col1.button("Toggle Status", key=f"toggle_{i}"):
             new_status = "Available" if d["status"] == "Busy" else "Busy"
             driver_sheet.update(f"C{i+2}:D{i+2}", [[new_status, ""]])
             st.rerun()
 
-        if col2.button("Delete", key=f"d{i}"):
+        if col2.button("Delete", key=f"delete_driver_{i}"):
             driver_sheet.delete_rows(i+2)
             st.rerun()
 
@@ -177,8 +174,9 @@ elif st.session_state.page == "admin":
     st.subheader("📦 Requests")
 
     data = pickup_sheet.get_all_values()
+
     if len(data) <= 1:
-        st.warning("No data")
+        st.warning("No requests")
         st.stop()
 
     rows = data[1:]
@@ -202,7 +200,7 @@ elif st.session_state.page == "admin":
 
         col1, col2, col3 = st.columns(3)
 
-        # MANUAL ASSIGN / REASSIGN
+        # MANUAL ASSIGN
         if status != "Completed":
 
             drivers = driver_sheet.get_all_records()
@@ -214,9 +212,13 @@ elif st.session_state.page == "admin":
 
             if available:
 
-                selected = col1.selectbox("Select Driver", available, key=f"s{i}")
+                selected = col1.selectbox(
+                    "Select Driver",
+                    available,
+                    key=f"select_{row_index}"
+                )
 
-                if col1.button("🚗 Assign", key=f"a{i}"):
+                if col1.button("🚗 Assign", key=f"assign_{row_index}"):
 
                     new_name, new_phone = selected.split(" | ")
 
@@ -237,19 +239,19 @@ elif st.session_state.page == "admin":
                     st.success(f"Assigned {new_name}")
                     st.rerun()
 
-        # DELETE
-        if col2.button("❌ Delete", key=f"d{i}"):
+        # DELETE REQUEST
+        if col2.button("❌ Delete", key=f"delete_req_{row_index}"):
             pickup_sheet.delete_rows(row_index)
             st.rerun()
 
         # WHATSAPP
         wa = f"https://wa.me/{clean_phone(phone)}?text={urllib.parse.quote('Pickup confirmed')}"
-        col3.link_button("💬 WhatsApp", wa)
+        col3.link_button("💬 WhatsApp", wa, key=f"wa_{row_index}")
 
         st.divider()
 
 # =====================
-# DRIVER
+# DRIVER PAGE
 # =====================
 elif st.session_state.page == "driver":
 
