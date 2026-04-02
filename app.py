@@ -11,7 +11,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS
+# GOOGLE SHEETS SAFE SETUP
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -24,14 +24,47 @@ gcp_info["private_key"] = gcp_info["private_key"].replace("\\n", "\n")
 creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
-sheet = client.open_by_key("1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s")
+# -----------------------
+# SAFE SHEET CREATE / OPEN
+# -----------------------
+def open_or_create(sheet_id, sheet_name, headers):
+    try:
+        sh = client.open_by_key(sheet_id)
+    except Exception as e:
+        st.error(f"❌ Sheet connection failed: {e}")
+        st.stop()
 
-pickup_sheet = sheet.worksheet("Pickup1")
-driver_sheet = sheet.worksheet("Drivers")
+    try:
+        ws = sh.worksheet(sheet_name)
+    except:
+        ws = sh.add_worksheet(title=sheet_name, rows="1000", cols="20")
+        ws.append_row(headers)
 
-# PG DATA
-pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
-pg_data_sheet = pg_sheet.worksheet("Sheet1")
+    return ws
+
+# -----------------------
+# CONNECT SHEETS
+# -----------------------
+MAIN_SHEET_ID = "1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s"
+PG_SHEET_ID = "1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q"
+
+pickup_sheet = open_or_create(
+    MAIN_SHEET_ID,
+    "Pickup1",
+    ["name","phone","pg_name","pickup_required","pickup_point","status","driver_name","driver_phone","timestamp"]
+)
+
+driver_sheet = open_or_create(
+    MAIN_SHEET_ID,
+    "Drivers",
+    ["name","phone","status","current_ride"]
+)
+
+pg_data_sheet = open_or_create(
+    PG_SHEET_ID,
+    "Sheet1",
+    ["pg_name"]
+)
 
 # -----------------------
 # PHONE CLEAN
@@ -74,7 +107,7 @@ elif st.session_state.page == "user":
     phone = st.text_input("Phone")
 
     pg_data = pg_data_sheet.get_all_records()
-    pg_list = [row.get("pg_name") or row.get("name") for row in pg_data if row.get("pg_name") or row.get("name")]
+    pg_list = [row.get("pg_name") for row in pg_data if row.get("pg_name")]
 
     pg = st.selectbox("PG Name", pg_list)
 
@@ -86,7 +119,7 @@ elif st.session_state.page == "user":
             st.error("Fill details")
             st.stop()
 
-        next_row = max(2, len(pickup_sheet.get_all_values()) + 1)
+        next_row = len(pickup_sheet.get_all_values()) + 1
 
         pickup_sheet.insert_row([
             name, phone, pg, "Yes", point,
@@ -121,9 +154,7 @@ elif st.session_state.page == "admin":
                 st.error("Driver exists")
                 st.stop()
 
-        next_row = max(2, len(driver_sheet.get_all_values()) + 1)
-        driver_sheet.insert_row([d_name, d_phone, d_status, ""], next_row)
-
+        driver_sheet.append_row([d_name, d_phone, d_status, ""])
         st.success("Driver Added")
         st.rerun()
 
@@ -181,27 +212,23 @@ elif st.session_state.page == "admin":
 
         col1, col2, col3 = st.columns(3)
 
-        # 🔥 ALWAYS SHOW MANUAL ASSIGN
+        # MANUAL ASSIGN / REASSIGN
         if status != "Completed":
 
             drivers = driver_sheet.get_all_records()
 
-            available_drivers = [
+            available = [
                 f"{d['name']} | {d['phone']}"
                 for d in drivers if d["status"] == "Available"
             ]
 
-            if available_drivers:
+            if available:
 
-                selected_driver = col1.selectbox(
-                    "Select Driver",
-                    available_drivers,
-                    key=f"sel{i}"
-                )
+                selected = col1.selectbox("Select Driver", available, key=f"s{i}")
 
-                if col1.button("🚗 Assign / Reassign", key=f"a{i}"):
+                if col1.button("🚗 Assign", key=f"a{i}"):
 
-                    new_name, new_phone = selected_driver.split(" | ")
+                    new_name, new_phone = selected.split(" | ")
 
                     # FREE OLD DRIVER
                     for idx, d in enumerate(drivers):
@@ -221,21 +248,18 @@ elif st.session_state.page == "admin":
                     st.rerun()
 
         # DELETE
-        if col2.button("❌ Delete", key=f"dreq{i}"):
+        if col2.button("❌ Delete", key=f"d{i}"):
             pickup_sheet.delete_rows(row_index)
             st.rerun()
 
         # WHATSAPP
-        clean_num = clean_phone(phone)
-        msg = f"Hello {name}, your pickup is confirmed!"
-        wa = f"https://wa.me/{clean_num}?text={urllib.parse.quote(msg)}"
-
+        wa = f"https://wa.me/{clean_phone(phone)}?text={urllib.parse.quote('Pickup confirmed')}"
         col3.link_button("💬 WhatsApp", wa)
 
         st.divider()
 
 # =====================
-# DRIVER APP
+# DRIVER
 # =====================
 elif st.session_state.page == "driver":
 
@@ -268,8 +292,8 @@ elif st.session_state.page == "driver":
 
         if st.button("Complete Ride"):
 
-            d_index = drivers.index(driver) + 2
-            driver_sheet.update(f"C{d_index}:D{d_index}", [["Available", ""]])
+            idx = drivers.index(driver) + 2
+            driver_sheet.update(f"C{idx}:D{idx}", [["Available", ""]])
 
             data = pickup_sheet.get_all_values()
 
