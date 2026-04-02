@@ -78,7 +78,6 @@ elif st.session_state.page == "user":
 
     name = st.text_input("Your Name")
     phone = st.text_input("Phone Number")
-
     pg_name = st.selectbox("PG Name", pg_list)
 
     st.divider()
@@ -101,22 +100,24 @@ elif st.session_state.page == "user":
                 st.error("⚠️ Please fill all details")
                 st.stop()
 
-            location = pickup_point
+            try:
+                pickup_sheet.append_row([
+                    str(name),
+                    str(phone),
+                    str(pg_name),
+                    "Yes",
+                    str(pickup_point),
+                    "Pending",
+                    "",
+                    "",
+                    str(datetime.now())
+                ])
 
-            pickup_sheet.append_row([
-                name,
-                phone,
-                pg_name,
-                "Yes",
-                location,
-                "Pending",
-                "",
-                "",
-                str(datetime.now())
-            ])
+                st.success("✅ Saved to Google Sheet")
+                st.rerun()
 
-            st.success("🚖 Pickup request submitted!")
-            st.info("We will contact you on WhatsApp shortly")
+            except Exception as e:
+                st.error(f"❌ Save failed: {e}")
 
     else:
 
@@ -161,7 +162,6 @@ elif st.session_state.page == "admin":
         st.info("No requests yet")
         st.stop()
 
-    headers = data[0]
     rows = data[1:]
 
     st.subheader("📦 Pickup Requests")
@@ -170,18 +170,19 @@ elif st.session_state.page == "admin":
 
         row_index = i + 2
 
-        o = {h.strip().lower(): v for h, v in zip(headers, rows[i])}
+        # DIRECT MAPPING (FIXED)
+        row = rows[i]
 
-        name_val = o.get("name", "")
-        phone_val = o.get("phone", "")
-        pg_val = o.get("pg_name", "")
-        point_val = o.get("pickup_point", "")
-        status_val = o.get("status", "")
-        driver_name = o.get("driver_name", "")
-        driver_phone = o.get("driver_phone", "")
+        name_val = row[0] if len(row) > 0 else ""
+        phone_val = row[1] if len(row) > 1 else ""
+        pg_val = row[2] if len(row) > 2 else ""
+        point_val = row[4] if len(row) > 4 else ""
+        status_val = row[5] if len(row) > 5 else "Pending"
+        driver_name = row[6] if len(row) > 6 else ""
+        driver_phone = row[7] if len(row) > 7 else ""
 
-        # CLEAN UI
-        st.markdown(f"### 👤 {name_val}  |  📞 {phone_val}")
+        # DISPLAY
+        st.markdown(f"### 👤 {name_val} | 📞 {phone_val}")
         st.markdown(f"🏠 **{pg_val}**")
         st.markdown(f"📍 {point_val}")
 
@@ -192,12 +193,8 @@ elif st.session_state.page == "admin":
 
         col1, col2 = st.columns(2)
 
-        msg = f"Hello {name_val}, your pickup is confirmed!"
-        encoded_msg = urllib.parse.quote(msg)
-        wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
-
-        # ASSIGN BUTTON
-        if status_val == "Pending":
+        # ASSIGN DRIVER
+        if status_val != "Assigned":
             if col1.button("✅ Assign", key=f"a{i}"):
 
                 driver_name = "Ravi Kumar"
@@ -209,10 +206,14 @@ elif st.session_state.page == "admin":
                     driver_phone
                 ]])
 
-                st.success("Assigned ✅")
+                st.success("Driver Assigned 🚗")
                 st.rerun()
 
-        # WHATSAPP BUTTON
+        # WHATSAPP
+        msg = f"Hello {name_val}, your pickup is confirmed!"
+        encoded_msg = urllib.parse.quote(msg)
+        wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
+
         col2.markdown(f"[💬 WhatsApp]({wa})")
 
         # CALL DRIVER
