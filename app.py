@@ -11,7 +11,7 @@ if "page" not in st.session_state:
     st.session_state.page = "home"
 
 # -----------------------
-# GOOGLE SHEETS
+# GOOGLE SHEETS SETUP
 # -----------------------
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -31,8 +31,12 @@ sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
 
 try:
     pickup_sheet = sheet.worksheet("Pickup1")
-except:
-    pickup_sheet = sheet.get_worksheet(0)
+except Exception as e:
+    st.error(f"Sheet error: {e}")
+    st.stop()
+
+# DEBUG (REMOVE LATER)
+st.write("Connected to sheet:", pickup_sheet.title)
 
 # -----------------------
 # PG DATA SHEET
@@ -94,46 +98,38 @@ elif st.session_state.page == "user":
             ["Railway Station", "Bus Stand", "Metro Station"]
         )
 
+        # ---------------- SAVE ----------------
         if st.button("Confirm Pickup"):
 
             if not name or not phone or not pg_name:
-                st.error("⚠️ Please fill all details")
+                st.error("⚠️ Fill all details")
                 st.stop()
 
             try:
+                st.write("Saving data...")  # DEBUG
+
                 pickup_sheet.append_row([
-                    str(name),
-                    str(phone),
-                    str(pg_name),
-                    "Yes",
-                    str(pickup_point),
-                    "Pending",
-                    "",
-                    "",
-                    str(datetime.now())
+                    name,           # A
+                    phone,          # B
+                    pg_name,        # C
+                    "Yes",          # D
+                    pickup_point,   # E
+                    "Pending",      # F
+                    "",             # G
+                    "",             # H
+                    str(datetime.now())  # I
                 ])
 
                 st.success("✅ Saved to Google Sheet")
-                st.rerun()
 
             except Exception as e:
-                st.error(f"❌ Save failed: {e}")
+                st.error(f"❌ SAVE ERROR: {e}")
 
     else:
 
         st.subheader("🧭 Self Navigation")
 
         st.markdown("[📍 Open Google Maps](https://maps.google.com)")
-        st.video("https://res.cloudinary.com/demo/video/upload/sample.mp4")
-
-        st.write("""
-        📌 Directions:
-        1. Exit main road  
-        2. Take left  
-        3. Walk 100 meters  
-        4. PG on right  
-        """)
-
         st.success("Easy to reach 👍")
 
 # =====================
@@ -156,10 +152,14 @@ elif st.session_state.page == "admin":
 
     st.divider()
 
-    data = pickup_sheet.get_all_values()
+    try:
+        data = pickup_sheet.get_all_values()
+    except Exception as e:
+        st.error(f"❌ READ ERROR: {e}")
+        st.stop()
 
     if len(data) <= 1:
-        st.info("No requests yet")
+        st.warning("⚠️ Sheet is empty (No data)")
         st.stop()
 
     rows = data[1:]
@@ -169,10 +169,9 @@ elif st.session_state.page == "admin":
     for i in reversed(range(len(rows))):
 
         row_index = i + 2
-
-        # DIRECT MAPPING (FIXED)
         row = rows[i]
 
+        # SAFE READ
         name_val = row[0] if len(row) > 0 else ""
         phone_val = row[1] if len(row) > 1 else ""
         pg_val = row[2] if len(row) > 2 else ""
@@ -183,7 +182,7 @@ elif st.session_state.page == "admin":
 
         # DISPLAY
         st.markdown(f"### 👤 {name_val} | 📞 {phone_val}")
-        st.markdown(f"🏠 **{pg_val}**")
+        st.markdown(f"🏠 {pg_val}")
         st.markdown(f"📍 {point_val}")
 
         if status_val == "Pending":
@@ -197,13 +196,10 @@ elif st.session_state.page == "admin":
         if status_val != "Assigned":
             if col1.button("✅ Assign", key=f"a{i}"):
 
-                driver_name = "Ravi Kumar"
-                driver_phone = "919876543210"
-
                 pickup_sheet.update(f"F{row_index}:H{row_index}", [[
                     "Assigned",
-                    driver_name,
-                    driver_phone
+                    "Ravi Kumar",
+                    "919876543210"
                 ]])
 
                 st.success("Driver Assigned 🚗")
@@ -211,12 +207,10 @@ elif st.session_state.page == "admin":
 
         # WHATSAPP
         msg = f"Hello {name_val}, your pickup is confirmed!"
-        encoded_msg = urllib.parse.quote(msg)
-        wa = f"https://wa.me/{phone_val}?text={encoded_msg}"
+        wa = f"https://wa.me/{phone_val}?text={urllib.parse.quote(msg)}"
 
         col2.markdown(f"[💬 WhatsApp]({wa})")
 
-        # CALL DRIVER
         if driver_phone:
             st.markdown(f"[📞 Call Driver](tel:{driver_phone})")
 
