@@ -34,7 +34,7 @@ pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
 pg_data_sheet = pg_sheet.worksheet("Sheet1")
 
 # -----------------------
-# PHONE CLEAN FUNCTION
+# PHONE CLEAN
 # -----------------------
 def clean_phone(phone):
     p = str(phone).replace("+", "").replace(" ", "").strip()
@@ -189,38 +189,51 @@ elif st.session_state.page == "admin":
 
         col1, col2, col3 = st.columns(3)
 
-        # ASSIGN
+        # ✅ MANUAL DRIVER SELECT
         if status == "Pending":
-            if col1.button("🚗 Assign", key=f"a{i}"):
 
-                drivers = driver_sheet.get_all_records()
-                available = [d for d in drivers if d["status"] == "Available"]
+            drivers = driver_sheet.get_all_records()
 
-                if not available:
-                    st.error("No drivers")
+            available_drivers = [
+                f"{d['name']} | {d['phone']}"
+                for d in drivers if d["status"] == "Available"
+            ]
 
-                else:
-                    best = available[0]
+            if available_drivers:
+
+                selected_driver = col1.selectbox(
+                    "Select Driver",
+                    available_drivers,
+                    key=f"sel{i}"
+                )
+
+                if col1.button("🚗 Assign", key=f"a{i}"):
+
+                    d_name_sel, d_phone_sel = selected_driver.split(" | ")
 
                     pickup_sheet.update(f"F{row_index}:H{row_index}", [[
-                        "Assigned", best["name"], best["phone"]
+                        "Assigned", d_name_sel, d_phone_sel
                     ]])
 
-                    d_index = drivers.index(best) + 2
+                    for idx, d in enumerate(drivers):
+                        if str(d["phone"]) == d_phone_sel:
+                            driver_sheet.update(f"C{idx+2}:D{idx+2}", [[
+                                "Busy", name
+                            ]])
+                            break
 
-                    driver_sheet.update(f"C{d_index}:D{d_index}", [[
-                        "Busy", name
-                    ]])
-
-                    st.success("Assigned")
+                    st.success(f"Assigned {d_name_sel}")
                     st.rerun()
+
+            else:
+                st.error("No available drivers")
 
         # DELETE
         if col2.button("❌ Delete", key=f"dreq{i}"):
             pickup_sheet.delete_rows(row_index)
             st.rerun()
 
-        # WHATSAPP ✅ FIXED
+        # WHATSAPP
         clean_num = clean_phone(phone)
         msg = f"Hello {name}, your pickup is confirmed!"
         wa = f"https://wa.me/{clean_num}?text={urllib.parse.quote(msg)}"
@@ -246,8 +259,7 @@ elif st.session_state.page == "driver":
         input_phone = clean_phone(phone)
 
         for d in drivers:
-            db_phone = clean_phone(d["phone"])
-            if db_phone == input_phone:
+            if clean_phone(d["phone"]) == input_phone:
                 driver = d
                 break
 
