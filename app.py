@@ -33,6 +33,17 @@ driver_sheet = sheet.worksheet("Drivers")
 pg_sheet = client.open_by_key("1y60dTYBKgkOi7J37jtGK4BkkmUoZF8yD4P5J3xA5q6Q")
 pg_data_sheet = pg_sheet.worksheet("Sheet1")
 
+# -----------------------
+# PHONE CLEAN FUNCTION
+# -----------------------
+def clean_phone(phone):
+    p = str(phone).replace("+", "").replace(" ", "").strip()
+    if p.startswith("0"):
+        p = "91" + p[1:]
+    elif not p.startswith("91"):
+        p = "91" + p
+    return p
+
 # =====================
 # HOME
 # =====================
@@ -53,7 +64,7 @@ if st.session_state.page == "home":
         st.rerun()
 
 # =====================
-# USER PAGE
+# USER
 # =====================
 elif st.session_state.page == "user":
 
@@ -62,7 +73,7 @@ elif st.session_state.page == "user":
     name = st.text_input("Name")
     phone = st.text_input("Phone")
 
-    # ✅ PG DROPDOWN FIX
+    # PG DROPDOWN
     pg_data = pg_data_sheet.get_all_records()
     pg_list = []
 
@@ -84,21 +95,14 @@ elif st.session_state.page == "user":
         next_row = max(2, len(pickup_sheet.get_all_values()) + 1)
 
         pickup_sheet.insert_row([
-            name,
-            phone,
-            pg,
-            "Yes",
-            point,
-            "Pending",
-            "",
-            "",
-            str(datetime.now())
+            name, phone, pg, "Yes", point,
+            "Pending", "", "", str(datetime.now())
         ], next_row)
 
-        st.success("Request Sent")
+        st.success("✅ Request Sent")
 
 # =====================
-# ADMIN PAGE
+# ADMIN
 # =====================
 elif st.session_state.page == "admin":
 
@@ -107,11 +111,11 @@ elif st.session_state.page == "admin":
     if st.text_input("Password", type="password") != "1234":
         st.stop()
 
-    # ---------------- ADD DRIVER ----------------
+    # ADD DRIVER
     st.subheader("➕ Add Driver")
 
     d_name = st.text_input("Driver Name")
-    d_phone = st.text_input("Driver Phone").replace("+", "").strip()
+    d_phone = clean_phone(st.text_input("Driver Phone"))
     d_status = st.selectbox("Status", ["Available", "Busy"])
 
     if st.button("Add Driver"):
@@ -130,7 +134,7 @@ elif st.session_state.page == "admin":
         st.success("Driver Added")
         st.rerun()
 
-    # ---------------- DRIVER LIST ----------------
+    # DRIVER LIST
     st.subheader("👨‍✈️ Drivers")
 
     drivers = driver_sheet.get_all_records()
@@ -147,7 +151,6 @@ elif st.session_state.page == "admin":
         col1, col2 = st.columns(2)
 
         if col1.button("Toggle Status", key=f"t{i}"):
-
             new_status = "Available" if d["status"] == "Busy" else "Busy"
             driver_sheet.update(f"C{i+2}:D{i+2}", [[new_status, ""]])
             st.rerun()
@@ -156,7 +159,7 @@ elif st.session_state.page == "admin":
             driver_sheet.delete_rows(i+2)
             st.rerun()
 
-    # ---------------- REQUESTS ----------------
+    # REQUESTS
     st.subheader("📦 Requests")
 
     data = pickup_sheet.get_all_values()
@@ -176,6 +179,13 @@ elif st.session_state.page == "admin":
 
         st.markdown(f"### 👤 {name} | {phone}")
         st.write(f"{pg} | {point}")
+
+        if status == "Pending":
+            st.warning("Pending")
+        elif status == "Assigned":
+            st.success(f"Assigned → {d_name}")
+        elif status == "Completed":
+            st.info("Completed")
 
         col1, col2, col3 = st.columns(3)
 
@@ -205,20 +215,17 @@ elif st.session_state.page == "admin":
                     st.success("Assigned")
                     st.rerun()
 
-        # DELETE REQUEST
+        # DELETE
         if col2.button("❌ Delete", key=f"dreq{i}"):
             pickup_sheet.delete_rows(row_index)
             st.rerun()
 
-        # WHATSAPP
-        msg = f"Hello {name}, pickup confirmed"
-        wa = f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
+        # WHATSAPP ✅ FIXED
+        clean_num = clean_phone(phone)
+        msg = f"Hello {name}, your pickup is confirmed!"
+        wa = f"https://wa.me/{clean_num}?text={urllib.parse.quote(msg)}"
 
-        if col3.button("💬 WhatsApp", key=f"w{i}"):
-            st.markdown(
-                f"<script>window.open('{wa}', '_blank');</script>",
-                unsafe_allow_html=True
-            )
+        col3.link_button("💬 WhatsApp", wa)
 
         st.divider()
 
@@ -234,13 +241,12 @@ elif st.session_state.page == "driver":
     if st.button("Login"):
 
         drivers = driver_sheet.get_all_records()
-
         driver = None
 
-        for d in drivers:
-            db_phone = str(d["phone"]).replace("+", "").strip()
-            input_phone = phone.replace("+", "").strip()
+        input_phone = clean_phone(phone)
 
+        for d in drivers:
+            db_phone = clean_phone(d["phone"])
             if db_phone == input_phone:
                 driver = d
                 break
