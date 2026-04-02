@@ -25,18 +25,15 @@ creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
 # -----------------------
-# PICKUP SHEET
+# ✅ CORRECT PICKUP SHEET (FIXED ID)
 # -----------------------
-sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
+sheet = client.open_by_key("1HS2e5d6MrAQ52gJ8b_99SmVKn_QohyEvslDcnkAo87s")
 
 try:
     pickup_sheet = sheet.worksheet("Pickup1")
 except Exception as e:
-    st.error(f"Sheet error: {e}")
+    st.error(f"❌ Sheet error: {e}")
     st.stop()
-
-# DEBUG (REMOVE LATER)
-st.write("Connected to sheet:", pickup_sheet.title)
 
 # -----------------------
 # PG DATA SHEET
@@ -98,32 +95,29 @@ elif st.session_state.page == "user":
             ["Railway Station", "Bus Stand", "Metro Station"]
         )
 
-        # ---------------- SAVE ----------------
         if st.button("Confirm Pickup"):
 
             if not name or not phone or not pg_name:
-                st.error("⚠️ Fill all details")
+                st.error("⚠️ Please fill all details")
                 st.stop()
 
             try:
-                st.write("Saving data...")  # DEBUG
-
                 pickup_sheet.append_row([
-                    name,           # A
-                    phone,          # B
-                    pg_name,        # C
-                    "Yes",          # D
-                    pickup_point,   # E
-                    "Pending",      # F
-                    "",             # G
-                    "",             # H
-                    str(datetime.now())  # I
+                    name,
+                    phone,
+                    pg_name,
+                    "Yes",
+                    pickup_point,
+                    "Pending",
+                    "",
+                    "",
+                    str(datetime.now())
                 ])
 
                 st.success("✅ Saved to Google Sheet")
 
             except Exception as e:
-                st.error(f"❌ SAVE ERROR: {e}")
+                st.error(f"❌ Save failed: {e}")
 
     else:
 
@@ -155,11 +149,11 @@ elif st.session_state.page == "admin":
     try:
         data = pickup_sheet.get_all_values()
     except Exception as e:
-        st.error(f"❌ READ ERROR: {e}")
+        st.error(f"❌ Read error: {e}")
         st.stop()
 
     if len(data) <= 1:
-        st.warning("⚠️ Sheet is empty (No data)")
+        st.warning("⚠️ No data in sheet")
         st.stop()
 
     rows = data[1:]
@@ -171,7 +165,6 @@ elif st.session_state.page == "admin":
         row_index = i + 2
         row = rows[i]
 
-        # SAFE READ
         name_val = row[0] if len(row) > 0 else ""
         phone_val = row[1] if len(row) > 1 else ""
         pg_val = row[2] if len(row) > 2 else ""
@@ -180,7 +173,6 @@ elif st.session_state.page == "admin":
         driver_name = row[6] if len(row) > 6 else ""
         driver_phone = row[7] if len(row) > 7 else ""
 
-        # DISPLAY
         st.markdown(f"### 👤 {name_val} | 📞 {phone_val}")
         st.markdown(f"🏠 {pg_val}")
         st.markdown(f"📍 {point_val}")
@@ -192,7 +184,6 @@ elif st.session_state.page == "admin":
 
         col1, col2 = st.columns(2)
 
-        # ASSIGN DRIVER
         if status_val != "Assigned":
             if col1.button("✅ Assign", key=f"a{i}"):
 
@@ -205,7 +196,6 @@ elif st.session_state.page == "admin":
                 st.success("Driver Assigned 🚗")
                 st.rerun()
 
-        # WHATSAPP
         msg = f"Hello {name_val}, your pickup is confirmed!"
         wa = f"https://wa.me/{phone_val}?text={urllib.parse.quote(msg)}"
 
