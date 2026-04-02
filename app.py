@@ -73,14 +73,8 @@ elif st.session_state.page == "user":
     name = st.text_input("Name")
     phone = st.text_input("Phone")
 
-    # PG DROPDOWN
     pg_data = pg_data_sheet.get_all_records()
-    pg_list = []
-
-    for row in pg_data:
-        val = row.get("pg_name") or row.get("name")
-        if val:
-            pg_list.append(val)
+    pg_list = [row.get("pg_name") or row.get("name") for row in pg_data if row.get("pg_name") or row.get("name")]
 
     pg = st.selectbox("PG Name", pg_list)
 
@@ -128,7 +122,6 @@ elif st.session_state.page == "admin":
                 st.stop()
 
         next_row = max(2, len(driver_sheet.get_all_values()) + 1)
-
         driver_sheet.insert_row([d_name, d_phone, d_status, ""], next_row)
 
         st.success("Driver Added")
@@ -163,7 +156,6 @@ elif st.session_state.page == "admin":
     st.subheader("📦 Requests")
 
     data = pickup_sheet.get_all_values()
-
     if len(data) <= 1:
         st.warning("No data")
         st.stop()
@@ -180,17 +172,17 @@ elif st.session_state.page == "admin":
         st.markdown(f"### 👤 {name} | {phone}")
         st.write(f"{pg} | {point}")
 
-        if status == "Pending":
-            st.warning("Pending")
-        elif status == "Assigned":
+        if status == "Assigned":
             st.success(f"Assigned → {d_name}")
         elif status == "Completed":
             st.info("Completed")
+        else:
+            st.warning("Pending")
 
         col1, col2, col3 = st.columns(3)
 
-        # ✅ MANUAL DRIVER SELECT
-        if status == "Pending":
+        # 🔥 ALWAYS SHOW MANUAL ASSIGN
+        if status != "Completed":
 
             drivers = driver_sheet.get_all_records()
 
@@ -207,26 +199,26 @@ elif st.session_state.page == "admin":
                     key=f"sel{i}"
                 )
 
-                if col1.button("🚗 Assign", key=f"a{i}"):
+                if col1.button("🚗 Assign / Reassign", key=f"a{i}"):
 
-                    d_name_sel, d_phone_sel = selected_driver.split(" | ")
+                    new_name, new_phone = selected_driver.split(" | ")
 
+                    # FREE OLD DRIVER
+                    for idx, d in enumerate(drivers):
+                        if str(d["phone"]) == str(d_phone):
+                            driver_sheet.update(f"C{idx+2}:D{idx+2}", [["Available", ""]])
+
+                    # ASSIGN NEW
                     pickup_sheet.update(f"F{row_index}:H{row_index}", [[
-                        "Assigned", d_name_sel, d_phone_sel
+                        "Assigned", new_name, new_phone
                     ]])
 
                     for idx, d in enumerate(drivers):
-                        if str(d["phone"]) == d_phone_sel:
-                            driver_sheet.update(f"C{idx+2}:D{idx+2}", [[
-                                "Busy", name
-                            ]])
-                            break
+                        if str(d["phone"]) == new_phone:
+                            driver_sheet.update(f"C{idx+2}:D{idx+2}", [["Busy", name]])
 
-                    st.success(f"Assigned {d_name_sel}")
+                    st.success(f"Assigned {new_name}")
                     st.rerun()
-
-            else:
-                st.error("No available drivers")
 
         # DELETE
         if col2.button("❌ Delete", key=f"dreq{i}"):
@@ -256,10 +248,8 @@ elif st.session_state.page == "driver":
         drivers = driver_sheet.get_all_records()
         driver = None
 
-        input_phone = clean_phone(phone)
-
         for d in drivers:
-            if clean_phone(d["phone"]) == input_phone:
+            if clean_phone(d["phone"]) == clean_phone(phone):
                 driver = d
                 break
 
@@ -279,7 +269,6 @@ elif st.session_state.page == "driver":
         if st.button("Complete Ride"):
 
             d_index = drivers.index(driver) + 2
-
             driver_sheet.update(f"C{d_index}:D{d_index}", [["Available", ""]])
 
             data = pickup_sheet.get_all_values()
