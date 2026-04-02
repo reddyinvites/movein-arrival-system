@@ -25,7 +25,12 @@ creds = Credentials.from_service_account_info(gcp_info, scopes=scope)
 client = gspread.authorize(creds)
 
 sheet = client.open_by_key("191Fg2-jLtpvziqFrUdQNV2ki1iXYe_fdTGYv3_Tm7wA")
-pickup_sheet = sheet.worksheet("Sheet1")
+
+# ✅ FIXED HERE (no other changes)
+try:
+    pickup_sheet = sheet.worksheet("Pickup1")
+except:
+    pickup_sheet = sheet.get_worksheet(0)
 
 # =====================
 # HOME
@@ -151,7 +156,7 @@ elif st.session_state.page == "admin":
         driver_name = o.get("driver_name", "")
         driver_phone = o.get("driver_phone", "")
 
-        # SHOW DATA (NO HIDDEN ISSUE)
+        # SHOW DATA
         st.write(f"👤 {name_val if name_val else 'No Name'} | 📞 {phone_val if phone_val else 'No Phone'}")
         st.write(f"🏠 {pg_val}")
         st.write(f"📍 {point_val}")
@@ -181,7 +186,6 @@ elif st.session_state.page == "admin":
                 except Exception as e:
                     st.error(f"Update failed: {e}")
 
-                # WHATSAPP FIX
                 msg = f"Hello {name_val}, your pickup is confirmed! Driver: {driver_name}, Phone: {driver_phone}"
                 encoded_msg = urllib.parse.quote(msg)
 
